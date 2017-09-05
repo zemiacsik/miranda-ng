@@ -36,6 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <m_chat.h>
 #include <m_gui.h>
 #include <m_utils.h>
+#include <m_fontservice.h>
 
 #define OPTIONS_FONTCOUNT 20
 #define STATUSICONCOUNT 6

@@ -241,11 +241,8 @@ void UpdateFontSettings(FontIDW *font_id, FontSettingsW *fontsettings)
 /////////////////////////////////////////////////////////////////////////////////////////
 // RegisterFont service
 
-static int sttRegisterFontWorker(FontIDW *font_id, int _hLang)
+MIR_APP_DLL(int) Font_RegisterW(FontIDW *font_id, int _hLang)
 {
-	if (font_id->cbSize != sizeof(FontIDW))
-		return -1;
-
 	for (int i = 0; i < font_id_list.getCount(); i++) {
 		FontInternal& F = font_id_list[i];
 		if (!mir_wstrcmp(F.group, font_id->group) && !mir_wstrcmp(F.name, font_id->name) && !(F.flags & FIDF_ALLOWREREGISTER))
@@ -274,22 +271,17 @@ static int sttRegisterFontWorker(FontIDW *font_id, int _hLang)
 	return 0;
 }
 
-MIR_APP_DLL(int) Font_RegisterW(FontIDW *pFont, int _hLang)
-{
-	return sttRegisterFontWorker(pFont, _hLang);
-}
-
 MIR_APP_DLL(int) Font_Register(FontID *pFont, int _hLang)
 {
 	FontIDW temp;
 	if (!ConvertFontID(pFont, &temp)) return -1;
-	return sttRegisterFontWorker(&temp, _hLang);
+	return Font_RegisterW(&temp, _hLang);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // GetFont service
 
-static COLORREF sttGetFontWorker(const wchar_t *wszGroup, const wchar_t *wszName, LOGFONTW *lf)
+MIR_APP_DLL(COLORREF) Font_GetW(const wchar_t *wszGroup, const wchar_t *wszName, LOGFONTW *lf)
 {
 	COLORREF colour;
 
@@ -309,15 +301,10 @@ static COLORREF sttGetFontWorker(const wchar_t *wszGroup, const wchar_t *wszName
 	return colour;
 }
 
-MIR_APP_DLL(COLORREF) Font_GetW(const wchar_t *wszGroup, const wchar_t *wszName, LOGFONTW *pFont)
-{
-	return sttGetFontWorker(wszGroup, wszName, pFont);
-}
-
 MIR_APP_DLL(COLORREF) Font_Get(const char *szGroup, const char *szName, LOGFONTA *pFont)
 {
 	LOGFONTW lftemp;
-	COLORREF ret = sttGetFontWorker(_A2T(szGroup), _A2T(szName), &lftemp);
+	COLORREF ret = Font_GetW(_A2T(szGroup), _A2T(szName), &lftemp);
 	ConvertLOGFONT(&lftemp, pFont);
 	return ret;
 }

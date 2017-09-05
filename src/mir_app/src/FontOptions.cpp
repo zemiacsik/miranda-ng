@@ -176,7 +176,11 @@ static BOOL ExportSettings(HWND hwndDlg, const wchar_t *filename, OBJLIST<FontIn
 			iFontSize = (BYTE)-MulDiv(F.value.size, 72, GetDeviceCaps(hdc, LOGPIXELSY));
 			ReleaseDC(hwndDlg, hdc);
 		}
-		else iFontSize = F.value.size;
+		else {
+			HDC hdc = GetDC(hwndDlg);
+			iFontSize = MulDiv(F.value.size, 96, GetDeviceCaps(hdc, LOGPIXELSY));
+			ReleaseDC(hwndDlg, hdc);
+		}
 		fprintf(out, "%sSize=b%d\n", F.prefix, iFontSize);
 
 		fprintf(out, "%sSty=b%d\n", F.prefix, F.value.style);
@@ -530,7 +534,11 @@ static void sttSaveFontData(HWND hwndDlg, FontInternal &F)
 		db_set_b(0, F.dbSettingsGroup, str, (BYTE)-MulDiv(F.value.size, 72, GetDeviceCaps(hdc, LOGPIXELSY)));
 		ReleaseDC(hwndDlg, hdc);
 	}
-	else db_set_b(0, F.dbSettingsGroup, str, F.value.size);
+	else {
+		HDC hdc = GetDC(hwndDlg);
+		db_set_b(0, F.dbSettingsGroup, str, MulDiv(F.value.size, 96, GetDeviceCaps(hdc, LOGPIXELSY)));
+		ReleaseDC(hwndDlg, hdc);
+	}
 
 	mir_snprintf(str, "%sSty", F.prefix);
 	db_set_b(0, F.dbSettingsGroup, str, F.value.style);
