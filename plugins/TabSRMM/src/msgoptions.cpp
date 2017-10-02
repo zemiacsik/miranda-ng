@@ -758,14 +758,14 @@ static INT_PTR CALLBACK DlgProcLogOptions(HWND hwndDlg, UINT msg, WPARAM wParam,
 			break;
 		case IDC_MODIFY:
 		{
-			TemplateEditorNew teNew = { 0, 0, hwndDlg };
-			CreateDialogParam(g_hInst, MAKEINTRESOURCE(IDD_TEMPLATEEDIT), hwndDlg, DlgProcTemplateEditor, (LPARAM)&teNew);
+			CTemplateEditDlg *pDlg = new CTemplateEditDlg(FALSE, hwndDlg);
+			pDlg->Show();
 		}
 		break;
 		case IDC_RTLMODIFY:
 		{
-			TemplateEditorNew teNew = { 0, TRUE, hwndDlg };
-			CreateDialogParam(g_hInst, MAKEINTRESOURCE(IDD_TEMPLATEEDIT), hwndDlg, DlgProcTemplateEditor, (LPARAM)&teNew);
+			CTemplateEditDlg *pDlg = new CTemplateEditDlg(TRUE, hwndDlg);
+			pDlg->Show();
 		}
 		break;
 		case IDC_MSGLOGDIDSPLAY:
