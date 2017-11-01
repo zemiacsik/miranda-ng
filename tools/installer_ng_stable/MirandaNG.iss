@@ -57,7 +57,6 @@ Source: "Files\Docs\*"; DestDir: "{app}\Docs"; Components: program; Flags: ignor
 Source: "Files\Skins\Sounds\*"; DestDir: "{app}\Skins\Sounds"; Components: sounds; Flags: ignoreversion recursesubdirs createallsubdirs; AfterInstall: ShowPercent() 
 
 ; Icons
-Source: "Files\Icons\Proto_AIM.dll"; DestDir: "{app}\Icons"; Components: protocols\aim; Flags: ignoreversion; AfterInstall: ShowPercent() 
 Source: "Files\Icons\Proto_Facebook.dll"; DestDir: "{app}\Icons"; Components: protocols\facebook; Flags: ignoreversion; AfterInstall: ShowPercent() 
 Source: "Files\Icons\Proto_GG.dll"; DestDir: "{app}\Icons"; Components: protocols\gg; Flags: ignoreversion; AfterInstall: ShowPercent() 
 Source: "Files\Icons\Proto_ICQ.dll"; DestDir: "{app}\Icons"; Components: protocols\icq; Flags: ignoreversion; AfterInstall: ShowPercent() 
@@ -113,7 +112,6 @@ Source: "Files\Plugins\PluginUpdater.dll"; DestDir: "{app}\Plugins"; Components:
 Source: "Files\pu_stub.exe"; DestDir: "{app}"; Components: program; Flags: ignoreversion; AfterInstall: ShowPercent() 
 
 ; Protocols
-Source: "Files\Plugins\AIM.dll"; DestDir: "{app}\Plugins"; Components: protocols\aim; Flags: ignoreversion; AfterInstall: ShowPercent() 
 Source: "Files\Plugins\Facebook.dll"; DestDir: "{app}\Plugins"; Components: protocols\facebook; Flags: ignoreversion; AfterInstall: ShowPercent() 
 Source: "Files\Plugins\GG.dll"; DestDir: "{app}\Plugins"; Components: protocols\gg; Flags: ignoreversion; AfterInstall: ShowPercent()  
 Source: "Files\Plugins\ICQ.dll"; DestDir: "{app}\Plugins"; Components: protocols\icq; Flags: ignoreversion; AfterInstall: ShowPercent()  
@@ -150,7 +148,6 @@ Source: "Installer\{#VcRedistName}"; DestDir: {tmp}; Flags: deleteafterinstall; 
 Name: "program"; Description: "{cm:Program}"; Types: extended regular minimal custom; Flags: fixed 
 Name: "sounds"; Description: "{cm:Sounds}"; Types: extended custom 
 Name: "protocols"; Description: "{cm:Protocols}"; Types: extended regular minimal 
-Name: "protocols\aim"; Description: "{cm:Aim}"; Types: extended regular minimal 
 Name: "protocols\facebook"; Description: "{cm:Facebook}"; Types: extended regular minimal 
 Name: "protocols\gg"; Description: "{cm:Gg}"; Types: extended regular minimal 
 Name: "protocols\icq"; Description: "{cm:Icq}"; Types: extended regular minimal 
@@ -222,7 +219,6 @@ en.TypeCustom=Custom installation
 en.Program=Core components
 en.Sounds=Sound files
 en.Protocols=Protocols
-en.Aim=AIM protocol
 en.Facebook=Facebook protocol
 en.GG=GG protocol
 en.Icq=ICQ protocol
@@ -251,7 +247,6 @@ en.InfoCaption=Hover over the component to get additional information
 en.CoreFilesDescription=The minimum set of files needed to run the program.
 en.SoundsDescription=Sound notification support for various events.
 en.ProtocolsDescription=Various protocols for instant messaging and more.
-en.ProtocolsAIMDescription=AOL Instant Messenger (AIM) protocol support for Miranda NG.
 en.ProtocolsFbDescription=Facebook protocol support for Miranda NG. More advanced than XMPP facebook chat, supporting posting statuses, authorizations, searching contacts, and much more.
 en.ProtocolsGGDescription=Gadu-Gadu protocol support for Miranda NG.
 en.ProtocolsICQDescription=ICQ (OSCAR) protocol support for Miranda NG.
@@ -298,7 +293,6 @@ ru.TypeCustom=Выборочная установка
 ru.Program=Основные файлы
 ru.Sounds=Звуки
 ru.Protocols=Протоколы
-ru.Aim=Протокол AIM
 ru.Facebook=Протокол Facebook
 ru.GG=Протокол GG
 ru.Icq=Протокол ICQ
@@ -327,7 +321,6 @@ ru.InfoCaption=Наведите на компонент, чтобы получи
 ru.CoreFilesDescription=Минимальный набор файлов, необходимый для работы программы.
 ru.SoundsDescription=Звуковые эффекты, проигрываемые при различных событиях в программе.
 ru.ProtocolsDescription=Различные протоколы для обмена сообщениями и не только.
-ru.ProtocolsAIMDescription=Поддержка протокола AOL Instant Messenger (AIM) в Miranda NG.
 ru.ProtocolsFbDescription=Поддержка протокола Facebook в Miranda NG. Поддержка статусов, поиск контактов, авторизация и не только.
 ru.ProtocolsGGDescription=Поддержка протокола Gadu-Gadu в Miranda NG.
 ru.ProtocolsICQDescription=Поддержка протокола ICQ в Miranda NG.
@@ -374,7 +367,6 @@ cz.TypeCustom=Vlastní instalace
 cz.Program=Základní komponenty
 cz.Sounds=Zvukové soubory
 cz.protocols=Protokoly
-cz.Aim=AIM protokol
 cz.Facebook=Facebook protokol
 cz.GG=GG protokol
 cz.Icq=ICQ protokol
@@ -403,7 +395,6 @@ cz.InfoCaption=Najeďte myší na název komponenty pro zobrazení více informa
 cz.CoreFilesDescription=Balíček základních komponent vyžadovaných pro spuštění programu.
 cz.SoundsDescription=Podpora zvukových efektů pro různé události.
 cz.protocolsDescription=Různé protokoly pro rychlou komunikaci a další funkce.
-cz.protocolsAIMDescription=AOL Instant Messenger (AIM) protokol pro Mirandu NG. 
 cz.protocolsFbDescription=Facebook protokol pro Mirandu NG. Pokročilejší verze než Facebook chat přes Jabber (XMPP). Podporuje sdílení stavů, neviditelnost, autorizace, vyhledávání kontaktů a mnohem více.
 cz.protocolsGGDescription=Gadu-Gadu protokol pro Mirandu NG. 
 cz.protocolsICQDescription=ICQ (OSCAR) protokol pro Mirandu NG. 
@@ -450,7 +441,6 @@ de.TypeCustom=Benutzerdefinierte Installation
 de.Program=Kernkomponenten
 de.Sounds=Klangdateien
 de.Protocols=Protokolle
-de.Aim=AIM-Protokoll
 de.Facebook=Facebook-Protokoll
 de.GG=GG-Protokoll
 de.Icq=ICQ-Protokoll
@@ -479,7 +469,6 @@ de.InfoCaption=Fahren Sie mit der Maus über eine Komponente, um ihre Beschreibu
 de.CoreFilesDescription=Die für den Betrieb von Miranda NG notwendigen Dateien.
 de.SoundsDescription=Klangbenachrichtigungen für eine Vielzahl an Ereignissen.
 de.ProtocolsDescription=Verschiedene Protokolle für Sofortnachrichten und mehr.
-de.ProtocolsAIMDescription=AOL-Instant-Messenger- (AIM-)Unterstützung für Miranda NG.
 de.ProtocolsFbDescription=Facebook-Protokollunterstützung für Miranda NG. Funktionsreicher als der XMPP-Facebook-Chat, unterstützt das Veröffentlichen neuer Statusnachrichren, Autorisierung, Kontaktsuche und vieles mehr.
 de.ProtocolsGGDescription=Gadu-Gadu-Protokollunterstützung für Miranda NG.
 de.ProtocolsICQDescription=ICQ- (OSCAR-)Protokollunterstützung für Miranda NG.
@@ -526,7 +515,6 @@ pl.TypeCustom=Własna instalacja
 pl.Program=Pliki rdzenia
 pl.Sounds=Dźwięki
 pl.Protocols=Protokoły
-pl.Aim=AIM
 pl.Facebook=Facebook
 pl.GG=GG
 pl.Icq=ICQ
@@ -555,7 +543,6 @@ pl.InfoCaption=Najedź na element w celu dodatkowych informacji
 pl.CoreFilesDescription=Pliki konieczne do uruchomienia Mirandy.
 pl.SoundsDescription=Paczka predefiniowanych dźwięków dla różnych zdarzeń.
 pl.ProtocolsDescription=Wtyczki zapewniające wspracie dla różnych protokołów.
-pl.ProtocolsAIMDescription=Zapewnia obsługę protokołu AOL Instant Messenger (AIM).
 pl.ProtocolsFbDescription=Zapewnia obsługę protokołu Facebook. Dostarcza więcej niż czat facebooka przez XMPP. Wspiera ustawianie statusu, zatwierdzanie znajomości, wyszukiwanie kontaktów i wiele inncyh.
 pl.ProtocolsGGDescription=Zapewnia obsługę protokołu Gadu-Gadu.
 pl.ProtocolsICQDescription=Zapewnia obsługę protokołu ICQ (OSCAR).
@@ -628,6 +615,9 @@ const
   DRIVE_REMOTE = 4;      // The drive is a remote (network) drive.
   DRIVE_CDROM = 5;       // The drive is a CD-ROM drive.
   DRIVE_RAMDISK = 6;     // The drive is a RAM disk.
+
+  // don't forget to increment it after adding new components!
+  COMPONENTS_COUNT = 20; // Index of the first language
 
 // Default installation check
 function IsDefault: Boolean;
@@ -841,7 +831,6 @@ begin
     ComponentList.Add('program');
     ComponentList.Add('sounds');
     ComponentList.Add('protocols');
-    ComponentList.Add('protocols\aim');
     ComponentList.Add('protocols\facebook');
     ComponentList.Add('protocols\gg');
     ComponentList.Add('protocols\icq');
@@ -905,15 +894,15 @@ begin
   if CurPageID = wpSelectComponents then
   begin
     if ActiveLanguage = 'en' then
-      WizardForm.ComponentsList.Checked[25]:= True
+      WizardForm.ComponentsList.Checked[COMPONENTS_COUNT+4]:= True
     else if ActiveLanguage = 'ru' then
-      WizardForm.ComponentsList.Checked[21]:= True
+      WizardForm.ComponentsList.Checked[COMPONENTS_COUNT+0]:= True
     else if ActiveLanguage = 'cz' then
-      WizardForm.ComponentsList.Checked[22]:= True
+      WizardForm.ComponentsList.Checked[COMPONENTS_COUNT+1]:= True
     else if ActiveLanguage = 'pl' then
-      WizardForm.ComponentsList.Checked[23]:= True
+      WizardForm.ComponentsList.Checked[COMPONENTS_COUNT+2]:= True
     else if ActiveLanguage = 'de' then
-      WizardForm.ComponentsList.Checked[24]:= True;
+      WizardForm.ComponentsList.Checked[COMPONENTS_COUNT+3]:= True;
   end;
 end;
 
@@ -930,7 +919,6 @@ begin
     ExpandConstant('{cm:CoreFilesDescription}') + ';' +
     ExpandConstant('{cm:SoundsDescription}') + ';' +
     ExpandConstant('{cm:ProtocolsDescription}') + ';' +
-    ExpandConstant('{cm:ProtocolsAIMDescription}') + ';' +
     ExpandConstant('{cm:ProtocolsFbDescription}') + ';' +
     ExpandConstant('{cm:ProtocolsGGDescription}') + ';' +
     ExpandConstant('{cm:ProtocolsICQDescription}') + ';' +
