@@ -119,7 +119,7 @@ void CJabberProto::AddDefaultCaps()
 
 void CJabberProto::OnIqResultCapsDiscoInfo(HXML, CJabberIqInfo *pInfo)
 {
-	pResourceStatus r((JABBER_RESOURCE_STATUS*)pInfo->GetUserData());
+	pResourceStatus r(ResourceInfoFromJID(pInfo->GetFrom()));
 
 	HXML query = pInfo->GetChildNode();
 	if (pInfo->GetIqType() == JABBER_IQ_TYPE_RESULT && query) {
