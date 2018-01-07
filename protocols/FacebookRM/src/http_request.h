@@ -327,6 +327,7 @@ public:
 	// Request only messages history
 	ThreadInfoRequest(facebook_client *fc, bool isChat, const char *id, const char* timestamp = nullptr, int limit = -1);
 	ThreadInfoRequest(facebook_client *fc, const LIST<char> &ids, int offset, int limit);
+	ThreadInfoRequest(facebook_client * fc, const char * id);
 };
 
 // getting unread threads

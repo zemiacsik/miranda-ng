@@ -222,10 +222,11 @@ void FacebookProto::ProcessUnreadMessage(void *pParam)
 	// FIXME: Rework this whole request as offset doesn't work anyway, and allow to load all the unread messages for each thread (IMHO could be done in 2 single requests = 1) get number of messages for all threads 2) load the counts of messages for all threads)
 
 	// TODO: First load info about amount of unread messages, then load exactly this amount for each thread
+	// TODO: Better logic, can we have number of unread messages from params? It should be part of response
 
 	while (!threads->empty()) {
 
-		LIST<char> ids(1);
+		/*LIST<char> ids(1);
 		for (std::vector<std::string>::size_type i = 0; i < threads->size(); i++)
 			ids.insert(mir_strdup(threads->at(i).c_str()));
 
@@ -249,7 +250,31 @@ void FacebookProto::ProcessUnreadMessage(void *pParam)
 
 			facy.handle_success("ProcessUnreadMessage");
 		}
-		else facy.handle_error("ProcessUnreadMessage");
+		else facy.handle_error("ProcessUnreadMessage");*/
+
+		for (std::vector<std::string>::size_type i = 0; i < threads->size(); i++) {
+
+			HttpRequest *request = new ThreadInfoRequest(&facy, threads->at(i).c_str());
+			http::response resp = facy.sendRequest(request);
+
+			if (resp.code == HTTP_CODE_OK) {
+				try {
+					std::vector<facebook_message> messages;
+					ParseThreadMessages(&resp.data, &messages, false);
+
+					ReceiveMessages(messages, true);
+					debugLogA("*** Unread messages processed");
+				}
+				catch (const std::exception &e) {
+					debugLogA("*** Error processing unread messages: %s", e.what());
+				}
+
+				facy.handle_success("ProcessUnreadMessage");
+			}
+			else {
+				facy.handle_error("ProcessUnreadMessage");
+			}
+		}
 
 		offset += limit;
 		limit = 20; // TODO: use better limits?

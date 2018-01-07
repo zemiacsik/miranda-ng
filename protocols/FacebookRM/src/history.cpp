@@ -79,6 +79,21 @@ ThreadInfoRequest::ThreadInfoRequest(facebook_client *fc, const LIST<char> &ids,
 	}
 }
 
+ThreadInfoRequest::ThreadInfoRequest(facebook_client *fc, const char *id) :
+	HttpRequest(REQUEST_POST, FACEBOOK_SERVER_REGULAR "/api/graphqlbatch/")
+{
+	setCommonBody(fc);
+
+	// TODO: Get limit param and so, better customisation
+
+	// TODO: Build query..
+	std::stringstream ss;
+	ss << "queries={\"o0\":{\"doc_id\":\"1508526735892416\", \"query_params\" : {\"id\":\"" << id << "\", \"message_limit\" : 21, \"load_messages\" : 1, \"load_read_receipts\" : false, \"before\" : null}}}";
+
+	Body
+		<< ss.str().c_str();
+}
+
 void ThreadInfoRequest::setCommonBody(facebook_client *fc)
 {
 	Body
