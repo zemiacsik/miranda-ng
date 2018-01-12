@@ -21,6 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "stdafx.h"
+#include <regex>
+
+LRESULT CALLBACK PopupDlgProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 void parseUser(const JSONNode &it, facebook_user *fbu)
 {
@@ -102,6 +105,10 @@ void FacebookProto::ParseMessageType(facebook_message &message, const JSONNode &
 	}
 	else if (logType == "log:unsubscribe") {
 		message.type = UNSUBSCRIBE;
+
+		const JSONNode &client_id = log_data_["client_message_id"];
+		if (client_id)
+			message.message_id = client_id.as_string();
 
 		const JSONNode &fbids_ = log_data_["removed_participants"];
 		for (auto &it2 : fbids_) {
@@ -232,7 +239,7 @@ int FacebookProto::ParseNotifications(std::string *data, std::map< std::string, 
 		notification->link = url_.as_string();
 		notification->text = utils::text::html_entities_decode(utils::text::slashu_to_utf8(text_.as_string()));
 		notification->time = utils::time::from_string(time_.as_string());
-		notification->setIcon(icon_.as_string());
+		notification->icon = ParseIcon(icon_.as_string());
 
 		// Write notification to chatroom
 		UpdateNotificationsChatRoom(notification);
@@ -427,8 +434,83 @@ bool FacebookProto::ProcessSpecialMessage(std::vector<facebook_message>* message
 	return true;
 }
 
+const char* FacebookProto::ParseIcon(const std::string &url)
+{
+	if (url.empty())
+		return nullptr;
+	
+	auto itr = reactions.find(url);
+	if (itr == reactions.end()) {
+		UCHAR hash[MIR_SHA256_HASH_SIZE];
+		mir_sha256_hash(url.c_str(), url.length(), hash);
 
-int FacebookProto::ParseMessages(std::string *pData, std::vector<facebook_message>* messages, std::map< std::string, facebook_notification* >* notifications)
+		wchar_t wszHash[MIR_SHA256_HASH_SIZE * 2 + 10];
+		bin2hexW(hash, sizeof(hash), wszHash);
+
+		wchar_t wszFileName[MAX_PATH];
+		mir_snwprintf(wszFileName, L"%s\\%s", VARSW(L"%miranda_avatarcache%"), m_tszUserName);
+		if (_waccess(wszFileName, 0))
+			CreateDirectoryTreeW(wszFileName);
+
+		wcscat_s(wszFileName, L"\\");
+		wcscat_s(wszFileName, wszHash);
+		wcscat_s(wszFileName, L".ico");
+		if (_waccess(wszFileName, 0)) {
+			NETLIBHTTPREQUEST req = { sizeof(req) };
+			req.requestType = REQUEST_GET;
+			req.szUrl = (char*)url.c_str();
+			req.flags = NLHRF_NODUMPHEADERS;
+
+			NETLIBHTTPREQUEST *reply = Netlib_HttpTransaction(facy.handle_, &req);
+			if (reply != nullptr && reply->resultCode == HTTP_CODE_OK) {
+				IMGSRVC_MEMIO memio = { 0 };
+				memio.iLen = reply->dataLength;
+				memio.pBuf = reply->pData;
+				memio.fif = FIF_UNKNOWN; /* detect */
+
+				HBITMAP hBmp = (HBITMAP)CallService(MS_IMG_LOADFROMMEM, (WPARAM)&memio);
+				if (hBmp != nullptr) {
+					IMGSRVC_INFO info = { sizeof(info) };
+					info.wszName = wszFileName;
+					info.fif = FIF_ICO;
+					info.dwMask = IMGI_HBITMAP;
+					info.hbm = hBmp;
+					CallService(MS_IMG_SAVE, (WPARAM)&info, IMGL_WCHAR);
+				}
+			}
+		}
+
+		HICON hIcon;
+		if (ExtractIconEx(wszFileName, 0, nullptr, &hIcon, 1) == 1) {
+			int idx = (int)reactions.size() + 1;
+			wchar_t desc[256];
+			char name[256];
+			mir_snwprintf(desc, L"%s/%s%d", m_tszUserName, TranslateT("Reaction"), idx);
+			mir_snprintf(name, "%s_%s%d", m_szModuleName, "Reaction", idx);
+
+			POPUPCLASS ppc = { sizeof(ppc) };
+			ppc.flags = PCF_TCHAR;
+			ppc.PluginWindowProc = PopupDlgProc;
+			ppc.lParam = APF_RETURN_HWND;
+			ppc.pwszDescription = desc;
+			ppc.pszName = name;
+			ppc.hIcon = hIcon;
+			ppc.colorBack = RGB(59, 89, 152); // Facebook's blue
+			ppc.colorText = RGB(255, 255, 255); // white
+			ppc.iSeconds = 0;
+			popupClasses.push_back(Popup_RegisterClass(&ppc));
+
+			mir_cslock lck(csReactions);
+			reactions.insert(std::make_pair(url, name));
+		}
+
+		itr = reactions.find(url);
+	}
+
+	return (itr == reactions.end()) ? nullptr : itr->second.c_str();
+}
+
+int FacebookProto::ParseMessages(std::string *pData, std::vector<facebook_message>* messages)
 {
 	// remove old received messages from map		
 	for (auto it = facy.messages_ignore.begin(); it != facy.messages_ignore.end();) {
@@ -680,7 +762,7 @@ int FacebookProto::ParseMessages(std::string *pData, std::vector<facebook_messag
 					notification->link = url.as_string();
 					notification->id = alert_id.as_string();
 					notification->time = timestamp;
-					notification->setIcon(icon_.as_string());
+					notification->icon = ParseIcon(icon_.as_string());
 
 					// Fix notification ID
 					std::string::size_type pos = notification->id.find(":");
@@ -691,8 +773,8 @@ int FacebookProto::ParseMessages(std::string *pData, std::vector<facebook_messag
 					UpdateNotificationsChatRoom(notification);
 
 					// If it's unseen, remember it, otherwise forget it (here it will always be unseen)
-					if (notifications->find(notification->id) == notifications->end() && !notification->seen)
-						notifications->insert(std::make_pair(notification->id, notification));
+					if (facy.notifications.find(notification->id) == facy.notifications.end() && !notification->seen)
+						facy.notifications.insert(std::make_pair(notification->id, notification));
 					else
 						delete notification;
 				}
@@ -734,10 +816,16 @@ int FacebookProto::ParseMessages(std::string *pData, std::vector<facebook_messag
 				notification->id = alert_id;
 				notification->time = utils::time::from_string(data["time"].as_string());
 
+				const JSONNode &app_icon_ = data["app_icon"]["__html"];
+				if (app_icon_) {
+					std::string url = app_icon_.as_string();
+					notification->icon = ParseIcon(utils::text::source_get_value(&url, 3, "img class=\"img\"", "src=\"", "\""));
+				}
+
 				// Write notification to chatroom
 				UpdateNotificationsChatRoom(notification);
 
-				notifications->insert(std::make_pair(notification->id, notification));
+				facy.notifications.insert(std::make_pair(notification->id, notification));
 			}
 		}
 		else if (t == "jewel_requests_add") {
@@ -1000,13 +1088,13 @@ int FacebookProto::ParseMessages(std::string *pData, std::vector<facebook_messag
 
 			const JSONNode &alerts = it["alert_ids"];
 			for (auto &itAlerts : alerts) {
-				auto itAlert = notifications->find(itAlerts.as_string());
-				if (itAlert != notifications->end()) {
+				auto itAlert = facy.notifications.find(itAlerts.as_string());
+				if (itAlert != facy.notifications.end()) {
 					if (itAlert->second->hWndPopup != nullptr)
 						PUDeletePopup(itAlert->second->hWndPopup); // close popup
 
 					delete itAlert->second;
-					notifications->erase(itAlert);
+					facy.notifications.erase(itAlert);
 				}
 			}
 		}
@@ -1078,6 +1166,123 @@ int FacebookProto::ParseUnreadThreads(std::string *data, std::vector< std::strin
 
 int FacebookProto::ParseThreadMessages(std::string *data, std::vector< facebook_message >* messages, bool unreadOnly)
 {
+	/*size_t len = data->find("\r\n");
+	if (len != data->npos)
+		data->erase(len);*/
+
+	// since it could loop over multiple queries not all can be valid
+	// so return EXIT_FAILURE only if none is processed
+	bool hasResult = false;
+
+	// pattern for one query
+	std::regex r("\\{\"o\\d\":\\{\"data\":\\{\"message_thread\":\\{.+\\}{4,5}"); // (\\{|$)
+	std::sregex_iterator i = std::sregex_iterator(data->begin(), data->end(), r);
+	std::sregex_iterator end;
+	// loop over queries
+	for (; i != end; ++i) {
+
+		std::smatch m = *i;
+		std::string match = m.str();
+
+		JSONNode root = JSONNode::parse(match.c_str());
+		if (!root)
+			//return EXIT_FAILURE;
+			continue;
+
+		// query number "o0", "o1", .. but they are not ordered
+		std::string oX = std::string("o") + std::string(1, match.at(3));
+
+		const JSONNode &thread = root[oX.c_str()]["data"]["message_thread"];
+		if (!thread)
+			//return EXIT_FAILURE;
+			continue;
+
+		const JSONNode &nodes = thread["messages"]["nodes"];
+		if (!nodes)
+			//return EXIT_FAILURE;
+			continue;
+
+		// TODO! process commented sections and better pair json (this is just quick attempt, + I do not know what everything means yet)
+
+		const JSONNode &other_user_fbid_ = thread["thread_key"]["other_user_id"];
+		const JSONNode &thread_fbid_ = thread["thread_key"]["thread_fbid"];
+
+		for (auto &it : nodes) {
+			const JSONNode &author_ = it["message_sender"]["id"];
+			const JSONNode &body_ = it["message"]["text"];
+			const JSONNode &thread_id_ = it["offline_threading_id"];
+			const JSONNode &mid_ = it["message_id"];
+			const JSONNode &timestamp_ = it["timestamp_precise"];
+			// const JSONNode &filtered_ = it["is_filtered_content"];
+			const JSONNode &is_unread_ = it["unread"];
+
+			// Either there is "body" (for classic messages), or "log_message_type" and "log_message_body" (for log messages)
+			const JSONNode &log_type_ = it["log_message_type"];
+			const JSONNode &log_body_ = it["log_message_body"];
+			const JSONNode &log_data_ = it["log_message_data"]; // additional data for this log message
+
+			if (!author_ || (!body_ && !log_body_) || !mid_ || (!thread_fbid_ && !thread_id_) || !timestamp_) {
+				debugLogA("ParseThreadMessages: ignoring message (%s) - missing attribute", mid_.as_string().c_str());
+				continue;
+			}
+
+			std::string thread_id = thread_id_.as_string();
+			std::string thread_fbid = thread_fbid_.as_string();
+			std::string message_id = mid_.as_string();
+			std::string message_text = body_ ? body_.as_string() : log_body_.as_string();
+			std::string author_id = author_.as_string();
+			std::string other_user_fbid = other_user_fbid_ ? other_user_fbid_.as_string() : "";
+			std::string::size_type pos = author_id.find(":"); // strip "fbid:" prefix
+			if (pos != std::string::npos)
+				author_id = author_id.substr(pos + 1);
+
+			// Process attachements and stickers
+			ParseAttachments(message_text, it, other_user_fbid, true);
+
+			//if (filtered_.as_bool() && message_text.empty())
+			//	message_text = Translate("This message is no longer available, because it was marked as abusive or spam.");
+
+			message_text = utils::text::trim(utils::text::slashu_to_utf8(message_text), true);
+			if (message_text.empty()) {
+				debugLogA("ParseThreadMessages: ignoring message (%s) - empty message text", mid_.as_string().c_str());
+				continue;
+			}
+
+			bool isUnread = is_unread_.as_bool();
+
+			// Ignore read messages if we want only unread messages
+			if (unreadOnly && !isUnread)
+				continue;
+
+			facebook_message message;
+			message.message_text = message_text;
+			message.time = utils::time::from_string(timestamp_.as_string());
+			message.message_id = message_id;
+			message.isIncoming = (author_id != facy.self_.user_id);
+			message.isUnread = isUnread;
+
+			message.isChat = other_user_fbid.empty();
+			if (message.isChat) {
+				message.user_id = author_id;
+				message.thread_id = "id." + thread_fbid;
+			}
+			else {
+				message.user_id = other_user_fbid;
+				message.thread_id = thread_id;
+			}
+
+			ParseMessageType(message, log_type_, log_body_, log_data_);
+
+			messages->push_back(message);
+			hasResult = true;
+		}
+	}
+
+	return hasResult ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int FacebookProto::ParseHistory(std::string *data, std::vector< facebook_message > *messages, std::string* firstTimestamp)
+{
 	size_t len = data->find("\r\n");
 	if (len != data->npos)
 		data->erase(len);
@@ -1096,110 +1301,19 @@ int FacebookProto::ParseThreadMessages(std::string *data, std::vector< facebook_
 
 	// TODO! process commented sections and better pair json (this is just quick attempt, + I do not know what everything means yet)
 
-	const JSONNode &other_user_fbid_ = thread["thread_key"]["other_user_id"];
-	const JSONNode &thread_fbid_ = thread["thread_key"]["thread_fbid"];
-
-	for (auto it = nodes.begin(); it != nodes.end(); ++it) {
-		const JSONNode &author_ = (*it)["message_sender"]["id"];
-		const JSONNode &body_ = (*it)["message"]["text"];
-		const JSONNode &thread_id_ = (*it)["offline_threading_id"];
-		const JSONNode &mid_ = (*it)["message_id"];
-		const JSONNode &timestamp_ = (*it)["timestamp_precise"];
-		// const JSONNode &filtered_ = (*it)["is_filtered_content"];
-		const JSONNode &is_unread_ = (*it)["unread"];
-
-		// Either there is "body" (for classic messages), or "log_message_type" and "log_message_body" (for log messages)
-		const JSONNode &log_type_ = (*it)["log_message_type"];
-		const JSONNode &log_body_ = (*it)["log_message_body"];
-		const JSONNode &log_data_ = (*it)["log_message_data"]; // additional data for this log message
-
-		if (!author_ || (!body_ && !log_body_) || !mid_ /*|| (!thread_fbid_ && !thread_id_)*/ || !timestamp_) {
-			debugLogA("parse_thread_messages: ignoring message (%s) - missing attribute", mid_.as_string().c_str());
-			continue;
-		}
-
-		std::string thread_id = thread_id_.as_string();
-		std::string thread_fbid = thread_fbid_.as_string();
-		std::string message_id = mid_.as_string();
-		std::string message_text = body_ ? body_.as_string() : log_body_.as_string();
-		std::string author_id = author_.as_string();
-		std::string other_user_fbid = other_user_fbid_ ? other_user_fbid_.as_string() : "";
-		std::string::size_type pos = author_id.find(":"); // strip "fbid:" prefix
-		if (pos != std::string::npos)
-			author_id = author_id.substr(pos + 1);
-
-		// Process attachements and stickers
-		// TODO!
-		//parseAttachments(proto, &message_text, *it, other_user_fbid, true);
-
-		//if (filtered_.as_bool() && message_text.empty())
-		//	message_text = Translate("This message is no longer available, because it was marked as abusive or spam.");
-
-		message_text = utils::text::trim(utils::text::slashu_to_utf8(message_text), true);
-		if (message_text.empty()) {
-			debugLogA("parse_thread_messages: ignoring message (%s) - empty message text", mid_.as_string().c_str());
-			continue;
-		}
-
-		bool isUnread = is_unread_.as_bool();
-
-		// Ignore read messages if we want only unread messages
-		if (unreadOnly && !isUnread)
-			continue;
-
-		facebook_message message;
-		message.message_text = message_text;
-		message.time = utils::time::from_string(timestamp_.as_string());
-		message.message_id = message_id;
-		message.isIncoming = (author_id != facy.self_.user_id);
-		message.isUnread = isUnread;
-
-		message.isChat = other_user_fbid.empty();
-		if (message.isChat) {
-			message.user_id = author_id;
-			message.thread_id = "id." + thread_fbid;
-		}
-		else {
-			message.user_id = other_user_fbid;
-			message.thread_id = thread_id;
-		}
-
-		// TODO!
-		//parseMessageType(proto, message, log_type_, log_body_, log_data_);
-
-		messages->push_back(message);
-	}
-
-	return EXIT_SUCCESS;
-}
-
-int FacebookProto::ParseHistory(std::string *data, std::vector< facebook_message >* messages, std::string *firstTimestamp)
-{
-	std::string jsonData = data->substr(9);
-
-	JSONNode root = JSONNode::parse(jsonData.c_str());
-	if (!root)
-		return EXIT_FAILURE;
-
-	const JSONNode &payload = root["payload"];
-	if (!payload)
-		return EXIT_FAILURE;
-
-	const JSONNode &actions = payload["actions"];
-	if (!actions)
-		return EXIT_FAILURE;
-
 	bool first = true;
 
-	for (auto &it : actions) {
-		const JSONNode &author = it["author"];
-		const JSONNode &other_user_fbid = it["other_user_fbid"];
-		const JSONNode &body = it["body"];
-		const JSONNode &tid = it["thread_id"];
+	const JSONNode &other_user_fbid_ = thread["thread_key"]["other_user_id"];
+	// const JSONNode &thread_fbid_ = thread["thread_key"]["thread_fbid"];
+
+	for (auto &it : nodes) {
+		const JSONNode &author = it["message_sender"]["id"];
+		const JSONNode &body = it["message"]["text"];
+		const JSONNode &tid = it["offline_threading_id"];
 		const JSONNode &mid = it["message_id"];
-		const JSONNode &timestamp = it["timestamp"];
-		const JSONNode &filtered = it["is_filtered_content"];
-		const JSONNode &is_unread = it["is_unread"];
+		const JSONNode &timestamp = it["timestamp_precise"];
+		// const JSONNode &filtered = it["is_filtered_content"];
+		const JSONNode &is_unread = it["unread"];
 
 		// Either there is "body" (for classic messages), or "log_message_type" and "log_message_body" (for log messages)
 		const JSONNode &log_type_ = it["log_message_type"];
@@ -1220,7 +1334,7 @@ int FacebookProto::ParseHistory(std::string *data, std::vector< facebook_message
 		std::string message_id = mid.as_string();
 		std::string message_text = body ? body.as_string() : log_body_.as_string();
 		std::string author_id = author.as_string();
-		std::string other_user_id = other_user_fbid ? other_user_fbid.as_string() : "";
+		std::string other_user_id = other_user_fbid_ ? other_user_fbid_.as_string() : "";
 		std::string::size_type pos = author_id.find(":"); // strip "fbid:" prefix
 		if (pos != std::string::npos)
 			author_id = author_id.substr(pos + 1);
@@ -1228,8 +1342,8 @@ int FacebookProto::ParseHistory(std::string *data, std::vector< facebook_message
 		// Process attachements and stickers
 		ParseAttachments(message_text, it, other_user_id, true);
 
-		if (filtered.as_bool() && message_text.empty())
-			message_text = Translate("This message is no longer available, because it was marked as abusive or spam.");
+		//if (filtered.as_bool() && message_text.empty())
+		//	message_text = Translate("This message is no longer available, because it was marked as abusive or spam.");
 
 		message_text = utils::text::trim(utils::text::slashu_to_utf8(message_text), true);
 		if (message_text.empty()) {
@@ -1314,26 +1428,26 @@ int FacebookProto::ParseUserInfo(std::string *data, facebook_user* fbu)
 
 int FacebookProto::ParseMessagesCount(std::string *data, int *messagesCount, int *unreadCount)
 {
-	std::string jsonData = data->substr(9);
+	size_t len = data->find("\r\n");
+	if (len != data->npos)
+		data->erase(len);
 
-	JSONNode root = JSONNode::parse(jsonData.c_str());
+	JSONNode root = JSONNode::parse(data->c_str());
 	if (!root)
 		return EXIT_FAILURE;
 
-	const JSONNode &threads = root["payload"].at("threads");
-	if (!threads)
+	const JSONNode &thread = root["o0"]["data"]["message_thread"];
+	if (!thread)
 		return EXIT_FAILURE;
 
-	for (auto &it : threads) {
-		const JSONNode &message_count_ = it["message_count"];
-		const JSONNode &unread_count_ = it["unread_count"];
+	const JSONNode &message_count_ = thread["messages_count"];
+	const JSONNode &unread_count_ = thread["unread_count"];
 
-		if (!message_count_ || !unread_count_)
-			return EXIT_FAILURE;
+	if (!message_count_ || !unread_count_)
+		return EXIT_FAILURE;
 
-		*messagesCount = message_count_.as_int();
-		*unreadCount = unread_count_.as_int();
-	}
+	*messagesCount = message_count_.as_int();
+	*unreadCount = unread_count_.as_int();
 
 	return EXIT_SUCCESS;
 }

@@ -36,14 +36,16 @@ class FacebookProto : public PROTO<FacebookProto>
 	int ParseChatInfo(std::string* data, facebook_chatroom* fbc);
 	int ParseChatParticipants(std::string *data, std::map<std::string, chatroom_participant>* participants);
 	int ParseFriends(std::string*, std::map< std::string, facebook_user* >*, bool);
-	int ParseHistory(std::string*, std::vector< facebook_message >*, std::string *);
-	int ParseMessages(std::string*, std::vector< facebook_message >*, std::map< std::string, facebook_notification* >*);
+	int ParseHistory(std::string* data, std::vector<facebook_message>* messages, std::string* firstTimestamp);
+	int ParseMessages(std::string*, std::vector< facebook_message >*);
 	int ParseMessagesCount(std::string *data, int *messagesCount, int *unreadCount);
 	int ParseNotifications(std::string*, std::map< std::string, facebook_notification* >*);
 	int ParseThreadInfo(std::string* data, std::string* user_id);
 	int ParseThreadMessages(std::string*, std::vector< facebook_message >*, bool unreadOnly);
 	int ParseUnreadThreads(std::string*, std::vector< std::string >*);
 	int ParseUserInfo(std::string* data, facebook_user* fbu);
+
+	const char* ParseIcon(const std::string &url);
 
 public:
 	FacebookProto(const char *proto_name, const wchar_t *username);
@@ -275,6 +277,9 @@ public:
 
 	std::string last_status_msg_;
 	std::vector<MCONTACT> avatar_queue;
+
+	mir_cs csReactions;
+	std::map<std::string, std::string> reactions;
 
 	// Information providing
 	HWND NotifyEvent(wchar_t* title, wchar_t* text, MCONTACT contact, EventType type, std::string *url = nullptr, std::string *notification_id = nullptr, const char *icon = nullptr);

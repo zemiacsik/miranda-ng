@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <cassert>
 
 #include <newpluginapi.h>
 #include <win2k.h>
@@ -50,45 +51,54 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #	define thread_local __declspec(thread)
 #endif
 
-
 class txn_ptr
 {
 	MDBX_txn *m_txn;
 public:
 	__forceinline txn_ptr(MDBX_env *pEnv)
 	{
-		mdbx_txn_begin(pEnv, NULL, 0, &m_txn);
+		int rc = mdbx_txn_begin(pEnv, NULL, 0, &m_txn);
+		/* FIXME: throw an exception */
+		assert(rc == MDBX_SUCCESS);
+		UNREFERENCED_PARAMETER(rc);
 	}
 
 	__forceinline ~txn_ptr()
 	{
-		if (m_txn)
-			mdbx_txn_abort(m_txn);
+		if (m_txn) {
+			/* FIXME: see https://github.com/leo-yuriev/libfpta/blob/77a7251fde2030165a3916ee68fd86a1374b3dd8/src/common.cxx#L370 */
+			abort();
+		}
 	}
 
 	__forceinline operator MDBX_txn*() const { return m_txn; }
 
 	__forceinline int commit()
 	{
-		MDBX_txn *tmp = m_txn;
+		int rc = mdbx_txn_commit(m_txn);
+		if (rc != MDBX_SUCCESS) {
+			/* FIXME: throw an exception */
+			abort();
+			return rc;
+		}
 		m_txn = nullptr;
-		return mdbx_txn_commit(tmp);
+		return MDBX_SUCCESS;
 	}
 
 	__forceinline void abort()
 	{
-		mdbx_txn_abort(m_txn);
-		m_txn = NULL;
+		int rc = mdbx_txn_abort(m_txn);
+		/* FIXME: throw an exception */
+		assert(rc == MDBX_SUCCESS);
+		UNREFERENCED_PARAMETER(rc);
+		m_txn = nullptr;
 	}
 };
 
 struct CMDBX_txn_ro
 {
-	MDBX_txn *m_txn;
-	bool bIsActive;
+	MDBX_txn *m_txn = nullptr;
 	mir_cs cs;
-
-	__forceinline CMDBX_txn_ro() : m_txn(nullptr), bIsActive(false) {}
 
 	__forceinline operator MDBX_txn* () { return m_txn; }
 	__forceinline MDBX_txn** operator &() { return &m_txn; }
@@ -97,24 +107,22 @@ struct CMDBX_txn_ro
 class txn_ptr_ro
 {
 	CMDBX_txn_ro &m_txn;
-	bool bNeedReset;
 	mir_cslock lock;
+
 public:
-	__forceinline txn_ptr_ro(CMDBX_txn_ro &txn) : m_txn(txn), bNeedReset(!txn.bIsActive), lock(m_txn.cs)
+	__forceinline txn_ptr_ro(CMDBX_txn_ro &txn) : m_txn(txn), lock(m_txn.cs)
 	{
-		if (bNeedReset)
-		{
-			mdbx_txn_renew(m_txn);
-			m_txn.bIsActive = true;
-		}
+		int rc = mdbx_txn_renew(m_txn);
+		/* FIXME: throw an exception */
+		assert(rc == MDBX_SUCCESS);
+		UNREFERENCED_PARAMETER(rc);
 	}
 	__forceinline ~txn_ptr_ro()
 	{
-		if (bNeedReset)
-		{
-			mdbx_txn_reset(m_txn);
-			m_txn.bIsActive = false;
-		}
+		int rc = mdbx_txn_reset(m_txn);
+		/* FIXME: throw an exception */
+		assert(rc == MDBX_SUCCESS);
+		UNREFERENCED_PARAMETER(rc);
 	}
 	__forceinline operator MDBX_txn*() const { return m_txn; }
 };
@@ -127,7 +135,7 @@ public:
 	__forceinline cursor_ptr(MDBX_txn *_txn, MDBX_dbi _dbi)
 	{
 		if (mdbx_cursor_open(_txn, _dbi, &m_cursor) != MDBX_SUCCESS)
-			m_cursor = NULL;
+			m_cursor = nullptr;
 	}
 
 	__forceinline ~cursor_ptr()
@@ -145,25 +153,19 @@ class cursor_ptr_ro
 public:
 	__forceinline cursor_ptr_ro(MDBX_cursor *cursor) : m_cursor(cursor)
 	{
-		mdbx_cursor_renew(mdbx_cursor_txn(m_cursor), m_cursor);
+		int rc = mdbx_cursor_renew(mdbx_cursor_txn(m_cursor), m_cursor);
+		/* FIXME: throw an exception */
+		assert(rc == MDBX_SUCCESS);
+		UNREFERENCED_PARAMETER(rc);
 	}
 	__forceinline operator MDBX_cursor*() const { return m_cursor; }
 };
-
-#define MDBX_CHECK(A,B) \
-	switch (A) { \
-	case MDBX_SUCCESS: break; \
-	case MDBX_MAP_FULL: continue; \
-	default: return (B); }
-
-
-
 
 #include "dbintf.h"
 #include "resource.h"
 #include "version.h"
 
 extern HINSTANCE g_hInst;
-extern LIST<CDbxMdb> g_Dbs;
+extern LIST<CDbxMDBX> g_Dbs;
 
 #include "ui.h"

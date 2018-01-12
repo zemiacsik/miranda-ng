@@ -108,13 +108,12 @@ FacebookProto::FacebookProto(const char* proto_name, const wchar_t* username) :
 FacebookProto::~FacebookProto()
 {
 	// Uninit popup classes
-	for (std::vector<HANDLE>::size_type i = 0; i < popupClasses.size(); i++)
-		Popup_UnregisterClass(popupClasses[i]);
+	for (auto &it : popupClasses)
+		Popup_UnregisterClass(it);
 	popupClasses.clear();
 
 	Netlib_CloseHandle(m_hNetlibUser);
 
-	WaitForSingleObject(update_loop_event, INFINITE);
 	CloseHandle(update_loop_event);
 }
 
@@ -898,15 +897,8 @@ void FacebookProto::ReadNotificationWorker(void *p)
 		return;
 
 	std::string *id = (std::string*)p;
-
-	if (isOffline()) {
-		delete id;
-		return;
-	}
-
-	HttpRequest *request = new MarkNotificationReadRequest(&facy, id->c_str());
-	facy.sendRequest(request);
-
+	if (!isOffline())
+		facy.sendRequest(facy.markNotificationReadRequest(id->c_str()));
 	delete id;
 }
 

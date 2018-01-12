@@ -23,17 +23,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "stdafx.h"
 
-STDMETHODIMP_(LONG) CDbxMdb::GetContactCount(void)
+STDMETHODIMP_(LONG) CDbxMDBX::GetContactCount(void)
 {
 	return m_contactCount;
 }
 
-STDMETHODIMP_(LONG) CDbxMdb::GetContactSize(void)
+STDMETHODIMP_(LONG) CDbxMDBX::GetContactSize(void)
 {
 	return sizeof(DBCachedContact);
 }
 
-STDMETHODIMP_(LONG) CDbxMdb::DeleteContact(MCONTACT contactID)
+STDMETHODIMP_(LONG) CDbxMDBX::DeleteContact(MCONTACT contactID)
 {
 	if (contactID == 0) // global contact cannot be removed
 		return 1;
@@ -51,7 +51,7 @@ STDMETHODIMP_(LONG) CDbxMdb::DeleteContact(MCONTACT contactID)
 		MDBX_val key, data;
 		DBSettingKey keyS = { contactID, 0, 0 };
 
-		txn_ptr txn(m_pMdbEnv);
+		txn_ptr txn(m_env);
 		cursor_ptr cursor(txn, m_dbSettings);
 
 		key.iov_len = sizeof(keyS); key.iov_base = &keyS;
@@ -67,32 +67,32 @@ STDMETHODIMP_(LONG) CDbxMdb::DeleteContact(MCONTACT contactID)
 	}
 
 	MDBX_val key = { &contactID, sizeof(MCONTACT) };
-	for (;; Remap()) {
-		txn_ptr trnlck(m_pMdbEnv);
-		MDBX_CHECK(mdbx_del(trnlck, m_dbContacts, &key, nullptr), 1);
-		if (trnlck.commit() == MDBX_SUCCESS)
-			break;
+	{
+		txn_ptr trnlck(m_env);
+		if (mdbx_del(trnlck, m_dbContacts, &key, nullptr) != MDBX_SUCCESS)
+			return 1;
+		if (trnlck.commit() != MDBX_SUCCESS)
+			return 1;
 	}
 
 	InterlockedDecrement(&m_contactCount);
-
 	return 0;
 }
 
-STDMETHODIMP_(MCONTACT) CDbxMdb::AddContact()
+STDMETHODIMP_(MCONTACT) CDbxMDBX::AddContact()
 {
 	MCONTACT dwContactId = InterlockedIncrement(&m_maxContactId);
 
 	DBCachedContact *cc = m_cache->AddContactToCache(dwContactId);
+	{
+		MDBX_val key = { &dwContactId, sizeof(MCONTACT) };
+		MDBX_val data = { &cc->dbc, sizeof(cc->dbc) };
 
-	MDBX_val key = { &dwContactId, sizeof(MCONTACT) };
-	MDBX_val data = { &cc->dbc, sizeof(cc->dbc) };
-
-	for (;; Remap()) {
-		txn_ptr trnlck(m_pMdbEnv);
-		MDBX_CHECK(mdbx_put(trnlck, m_dbContacts, &key, &data, 0), 0);
-		if (trnlck.commit() == MDBX_SUCCESS)
-			break;
+		txn_ptr trnlck(m_env);
+		if (mdbx_put(trnlck, m_dbContacts, &key, &data, 0) != MDBX_SUCCESS)
+			return 0;
+		if (trnlck.commit() != MDBX_SUCCESS)
+			return 0;
 	}
 
 	InterlockedIncrement(&m_contactCount);
@@ -100,7 +100,7 @@ STDMETHODIMP_(MCONTACT) CDbxMdb::AddContact()
 	return dwContactId;
 }
 
-STDMETHODIMP_(BOOL) CDbxMdb::IsDbContact(MCONTACT contactID)
+STDMETHODIMP_(BOOL) CDbxMDBX::IsDbContact(MCONTACT contactID)
 {
 	DBCachedContact *cc = m_cache->GetCachedContact(contactID);
 	return (cc != NULL);
@@ -108,9 +108,9 @@ STDMETHODIMP_(BOOL) CDbxMdb::IsDbContact(MCONTACT contactID)
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-void CDbxMdb::GatherContactHistory(MCONTACT hContact, LIST<EventItem> &list)
+void CDbxMDBX::GatherContactHistory(MCONTACT hContact, LIST<EventItem> &list)
 {
-	DBEventSortingKey keyVal = { 0, 0, hContact };
+	DBEventSortingKey keyVal = { hContact, 0, 0 };
 	MDBX_val key = { &keyVal, sizeof(keyVal) }, data;
 
 	txn_ptr_ro trnlck(m_txn);
@@ -125,67 +125,64 @@ void CDbxMdb::GatherContactHistory(MCONTACT hContact, LIST<EventItem> &list)
 	}
 }
 
-BOOL CDbxMdb::MetaMergeHistory(DBCachedContact *ccMeta, DBCachedContact *ccSub)
+BOOL CDbxMDBX::MetaMergeHistory(DBCachedContact *ccMeta, DBCachedContact *ccSub)
 {
 	LIST<EventItem> list(1000);
 	GatherContactHistory(ccSub->contactID, list);
 
 	for (int i = 0; i < list.getCount(); i++) {
 		EventItem *EI = list[i];
-
-		for (;; Remap()) {
-			txn_ptr trnlck(m_pMdbEnv);
-			DBEventSortingKey insVal = { EI->eventId, EI->ts, ccMeta->contactID };
+		{
+			txn_ptr trnlck(m_env);
+			DBEventSortingKey insVal = { ccMeta->contactID, EI->eventId, EI->ts };
 			MDBX_val key = { &insVal, sizeof(insVal) }, data = { (void*)"", 1 };
-			mdbx_put(trnlck, m_dbEventsSort, &key, &data, 0);
-			if (trnlck.commit() == MDBX_SUCCESS)
-				break;
+
+			if (mdbx_put(trnlck, m_dbEventsSort, &key, &data, 0) != MDBX_SUCCESS)
+				return 1;
+			if (trnlck.commit() != MDBX_SUCCESS)
+				return 1;
 		}
 		ccMeta->dbc.dwEventCount++;
 		delete EI;
 	}
 
 	MDBX_val keyc = { &ccMeta->contactID, sizeof(MCONTACT) }, datac = { &ccMeta->dbc, sizeof(ccMeta->dbc) };
-
-	for (;; Remap()) {
-		txn_ptr trnlck(m_pMdbEnv);
-		MDBX_CHECK(mdbx_put(trnlck, m_dbContacts, &keyc, &datac, 0), 1);
-		if (trnlck.commit() == MDBX_SUCCESS)
-			break;
-	}
+	txn_ptr trnlck(m_env);
+	if (mdbx_put(trnlck, m_dbContacts, &keyc, &datac, 0) != MDBX_SUCCESS)
+		return 1;
+	if (trnlck.commit() != MDBX_SUCCESS)
+		return 1;
 	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-BOOL CDbxMdb::MetaSplitHistory(DBCachedContact *ccMeta, DBCachedContact *ccSub)
+BOOL CDbxMDBX::MetaSplitHistory(DBCachedContact *ccMeta, DBCachedContact *ccSub)
 {
 	LIST<EventItem> list(1000);
 	GatherContactHistory(ccSub->contactID, list);
 
 	for (int i = 0; i < list.getCount(); i++) {
 		EventItem *EI = list[i];
-
-		for (;; Remap()) {
-			txn_ptr trnlck(m_pMdbEnv);
-			DBEventSortingKey insVal = { EI->eventId, EI->ts, ccMeta->contactID };
+		{
+			txn_ptr trnlck(m_env);
+			DBEventSortingKey insVal = { ccMeta->contactID, EI->eventId, EI->ts };
 			MDBX_val key = { &insVal, sizeof(insVal) }, data = { (void*)"", 1 };
-			mdbx_del(trnlck, m_dbEventsSort, &key, &data);
-			if (trnlck.commit() == MDBX_SUCCESS)
-				break;
+			if (mdbx_del(trnlck, m_dbEventsSort, &key, &data) != MDBX_SUCCESS)
+				return 1;
+			if (trnlck.commit() != MDBX_SUCCESS)
+				return 1;
 		}
 		ccMeta->dbc.dwEventCount--;
 		delete EI;
 	}
 
+	txn_ptr trnlck(m_env);
 	MDBX_val keyc = { &ccMeta->contactID, sizeof(MCONTACT) }, datac = { &ccMeta->dbc, sizeof(ccMeta->dbc) };
-
-	for (;; Remap()) {
-		txn_ptr trnlck(m_pMdbEnv);
-		MDBX_CHECK(mdbx_put(trnlck, m_dbContacts, &keyc, &datac, 0), 1);
-		if (trnlck.commit() == MDBX_SUCCESS)
-			break;
-	}
+	if(mdbx_put(trnlck, m_dbContacts, &keyc, &datac, 0) != MDBX_SUCCESS)
+		return 1;
+	if (trnlck.commit() != MDBX_SUCCESS)
+		return 1;
 	return 0;
 }
 
@@ -217,7 +214,7 @@ void DBCachedContact::Revert()
 /////////////////////////////////////////////////////////////////////////////////////////
 // initial cycle to fill the contacts' cache
 
-void CDbxMdb::FillContacts()
+void CDbxMDBX::FillContacts()
 {
 	LIST<DBCachedContact> arContacts(m_contactCount);
 

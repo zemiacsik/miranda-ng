@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "stdafx.h"
 
-int CDbxMdb::InitModules()
+int CDbxMDBX::InitModules()
 {
 	txn_ptr_ro trnlck(m_txn);
 	cursor_ptr_ro cursor(m_curModules);
@@ -38,31 +38,32 @@ int CDbxMdb::InitModules()
 }
 
 // will create the offset if it needs to
-uint32_t CDbxMdb::GetModuleID(const char *szName)
+uint32_t CDbxMDBX::GetModuleID(const char *szName)
 {
 	uint32_t iHash = mir_hashstr(szName);
 	if (m_Modules.find(iHash) == m_Modules.end()) {
 		MDBX_val key = { &iHash, sizeof(iHash) }, data = { (void*)szName, strlen(szName) + 1 };
-
-		for (;; Remap()) {
-			txn_ptr txn(m_pMdbEnv);
-			MDBX_CHECK(mdbx_put(txn, m_dbModules, &key, &data, 0), -1);
-			if (txn.commit() == MDBX_SUCCESS)
-				break;
+		{
+			txn_ptr txn(m_env);
+			if (mdbx_put(txn, m_dbModules, &key, &data, 0) != MDBX_SUCCESS)
+				return -1;
+			if (txn.commit() != MDBX_SUCCESS)
+				return -1;
 		}
+
 		m_Modules[iHash] = szName;
 	}
 
 	return iHash;
 }
 
-char* CDbxMdb::GetModuleName(uint32_t dwId)
+char* CDbxMDBX::GetModuleName(uint32_t dwId)
 {
 	auto it = m_Modules.find(dwId);
 	return it != m_Modules.end() ? const_cast<char*>(it->second.c_str()) : nullptr;
 }
 
-STDMETHODIMP_(BOOL) CDbxMdb::EnumModuleNames(DBMODULEENUMPROC pFunc, void *pParam)
+STDMETHODIMP_(BOOL) CDbxMDBX::EnumModuleNames(DBMODULEENUMPROC pFunc, void *pParam)
 {
 	for (auto it = m_Modules.begin(); it != m_Modules.end(); ++it)
 		if (int ret = pFunc(it->second.c_str(), pParam))
